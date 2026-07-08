@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "./lib/supabase";
 
 const DURACION_HORAS = 12;
 const EXPIRA_SEGUNDOS = 12 * 60 * 60; // 12h
