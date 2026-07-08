@@ -11,36 +11,6 @@ const TAREAS = [
   { id: "admin", label: "CONTACTAR ADMIN Y SOPORTE 24/7", url: "https://t.me/" },
 ];
 
-const generar = async () => {
-  if (!todasHechas || procesando) return;
-
-  setProcesando(true);
-
-  try {
-    const { data, error } = await supabase
-      .from("licenses")
-      .select("license_key")
-      .eq("active", true);
-
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-      alert("No hay licencias disponibles.");
-      return;
-    }
-
-    const licencia = data[Math.floor(Math.random() * data.length)];
-
-    setKey(licencia.license_key);
-    setRestante(EXPIRA_SEGUNDOS);
-
-  } catch (err) {
-    console.error(err);
-    alert("Error al obtener la licencia.");
-  } finally {
-    setProcesando(false);
-  }
-};
 
 function formatoTiempo(s) {
   const h = String(Math.floor(s / 3600)).padStart(2, "0");
@@ -78,15 +48,37 @@ export default function App() {
     }, 1500);
   };
 
-  const generar = () => {
-    if (!todasHechas || procesando) return;
-    setProcesando(true);
-    setTimeout(() => {
-      setKey(generarKey());
-      setRestante(EXPIRA_SEGUNDOS);
-      setProcesando(false);
-    }, 1600);
-  };
+  const generar = async () => {
+  if (!todasHechas || procesando) return;
+
+  setProcesando(true);
+
+  try {
+    const { data, error } = await supabase
+      .from("licenses")
+      .select("*")
+      .eq("active", true)
+      .limit(1);
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      alert("No hay licencias disponibles.");
+      return;
+    }
+
+    const licencia = data[0];
+
+    setKey(licencia.license_key);
+    setRestante(EXPIRA_SEGUNDOS);
+
+  } catch (err) {
+    console.error(err);
+    alert("Error al obtener la licencia.");
+  } finally {
+    setProcesando(false);
+  }
+};
 
   const copiar = async () => {
     try {
