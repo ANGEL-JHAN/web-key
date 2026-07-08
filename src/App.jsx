@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 
-const DURACION_HORAS = 12;
-const EXPIRA_SEGUNDOS = 12 * 60 * 60; // 12h
+const DURACION_HORAS = 24;
+const EXPIRA_SEGUNDOS = 24 * 60 * 60; // 24h
 
 const TAREAS = [
   { id: "grupo", label: "UNIRSE AL GRUPO DE AVISOS", url: "https://t.me/" },
