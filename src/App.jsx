@@ -58,23 +58,23 @@ export default function App() {
       .from("licenses")
       .select("*")
       .eq("active", true)
-      .limit(1);
+      .order("id", { ascending: true })
+      .limit(1)
+      .single();
 
     if (error) throw error;
 
-    if (!data || data.length === 0) {
-      alert("No hay licencias disponibles.");
-      return;
-    }
-
-    const licencia = data[0];
-
-    setKey(licencia.license_key);
+    setKey(data.license_key);
     setRestante(EXPIRA_SEGUNDOS);
+
+    await supabase
+      .from("licenses")
+      .update({ active: false })
+      .eq("id", data.id);
 
   } catch (err) {
     console.error(err);
-    alert("Error al obtener la licencia.");
+    alert("No hay licencias disponibles.");
   } finally {
     setProcesando(false);
   }
