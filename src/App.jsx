@@ -21,6 +21,19 @@ function formatoTiempo(s) {
 }
 
 
+function obtenerDeviceId() {
+
+  let id = localStorage.getItem("device_id");
+
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("device_id", id);
+  }
+
+  return id;
+}
+
+
 export default function App() {
 
   const [completadas, setCompletadas] = useState({});
@@ -30,14 +43,16 @@ export default function App() {
   const [copiado, setCopiado] = useState(false);
 
 
-  // Recuperar key al volver a entrar
   useEffect(() => {
+
     const guardada = localStorage.getItem("mi_key");
 
     if (guardada) {
       setKey(guardada);
     }
+
   }, []);
+
 
 
   const todasHechas = useMemo(
@@ -46,7 +61,7 @@ export default function App() {
   );
 
 
-  // Tiempo real desde Supabase
+
   useEffect(() => {
 
     if (!key) return;
@@ -54,32 +69,45 @@ export default function App() {
 
     const actualizarTiempo = async () => {
 
+      const deviceId = obtenerDeviceId();
+
+
       const { data } = await supabase
         .from("licenses")
         .select("expires_at")
         .eq("license_key", key)
+        .eq("device_id", deviceId)
         .single();
 
 
       if (data?.expires_at) {
 
-        const ahora = Date.now();
-        const expira = new Date(data.expires_at).getTime();
-
-
         const segundos = Math.max(
           0,
-          Math.floor((expira - ahora) / 1000)
+          Math.floor(
+            (new Date(data.expires_at).getTime() - Date.now()) / 1000
+          )
         );
 
 
         setRestante(segundos);
 
 
-        // Si expiró elimina la key guardada
         if (segundos <= 0) {
+
+          await supabase
+            .from("licenses")
+            .update({
+              active: false,
+              device_id: null,
+              expires_at: null
+            })
+            .eq("license_key", key);
+
+
           localStorage.removeItem("mi_key");
           setKey("");
+
         }
 
       }
@@ -89,7 +117,10 @@ export default function App() {
 
     actualizarTiempo();
 
-    const intervalo = setInterval(actualizarTiempo, 1000);
+    const intervalo = setInterval(
+      actualizarTiempo,
+      1000
+    );
 
 
     return () => clearInterval(intervalo);
@@ -109,12 +140,12 @@ export default function App() {
 
     setTimeout(() => {
 
-      setCompletadas((c) => ({
+      setCompletadas((c)=>({
         ...c,
         [t.id]: true
       }));
 
-    }, 1500);
+    },1500);
 
   };
 
@@ -130,24 +161,73 @@ export default function App() {
 
     try {
 
+      const deviceId = obtenerDeviceId();
+      const ahora = new Date().toISOString();
+
+
+
+      const { data: existente } = await supabase
+        .from("licenses")
+        .select("*")
+        .eq("device_id", deviceId)
+        .gt("expires_at", ahora)
+        .single();
+
+
+
+      if (existente) {
+
+        setKey(existente.license_key);
+
+        localStorage.setItem(
+          "mi_key",
+          existente.license_key
+        );
+
+        return;
+
+      }
+
+
+
+      await supabase
+        .from("licenses")
+        .update({
+          active:false,
+          device_id:null,
+          expires_at:null
+        })
+        .lt("expires_at", ahora);
+
+
 
       const { data, error } = await supabase
         .from("licenses")
         .select("*")
-        .eq("active", true)
-        .order("id", { ascending: true })
+        .eq("active", false)
         .limit(1)
         .single();
 
 
 
-      if (error) throw error;
+      if(error) throw error;
 
 
 
       const fechaExpira = new Date(
         Date.now() + EXPIRA_SEGUNDOS * 1000
       ).toISOString();
+
+
+
+      await supabase
+        .from("licenses")
+        .update({
+          active:true,
+          device_id:deviceId,
+          expires_at:fechaExpira
+        })
+        .eq("id", data.id);
 
 
 
@@ -163,21 +243,10 @@ export default function App() {
 
 
 
-      await supabase
-        .from("licenses")
-        .update({
-          active: false,
-          expires_at: fechaExpira
-        })
-        .eq("id", data.id);
+    } catch(e) {
 
-
-
-    } catch (err) {
-
-      console.error(err);
-
-      alert("No hay licencias disponibles.");
+      console.error(e);
+      alert("No hay keys disponibles");
 
     } finally {
 
@@ -186,9 +255,6 @@ export default function App() {
     }
 
   };
-
-
-
   const copiar = async () => {
 
     try {
@@ -196,7 +262,6 @@ export default function App() {
       await navigator.clipboard.writeText(key);
 
       setCopiado(true);
-
 
       setTimeout(() => {
         setCopiado(false);
@@ -232,46 +297,82 @@ export default function App() {
 
       <div className="card">
 
-        <div className="icono">🔑</div>
+        <div className="icono">
+          🔑
+        </div>
 
-        <h1>Generador de Key</h1>
+
+        <h1>
+          Generador de Key
+        </h1>
+
 
         <p className="subtitulo">
           Crea tu key gratis — rápido y seguro
         </p>
 
 
+
         <div className="info-grid">
 
+
           <div className="info-box">
-            <div className="info-emoji">📱</div>
-            <div>
-              <div className="info-label">DISPOSITIVO</div>
-              <div className="info-valor">1 Dispositivo</div>
+
+            <div className="info-emoji">
+              📱
             </div>
+
+            <div>
+
+              <div className="info-label">
+                DISPOSITIVO
+              </div>
+
+              <div className="info-valor">
+                1 Dispositivo
+              </div>
+
+            </div>
+
           </div>
 
 
+
           <div className="info-box">
-            <div className="info-emoji">⏱</div>
+
+            <div className="info-emoji">
+              ⏱
+            </div>
+
             <div>
-              <div className="info-label">DURACIÓN</div>
+
+              <div className="info-label">
+                DURACIÓN
+              </div>
+
               <div className="info-valor">
                 {DURACION_HORAS} Horas
               </div>
+
             </div>
+
           </div>
 
+
         </div>
+
+
 
 
 
         {!key && (
 
           <>
+
             <div className="seccion-label">
               TAREAS DE VERIFICACIÓN
             </div>
+
 
 
             <div className="tareas">
@@ -279,40 +380,86 @@ export default function App() {
               {TAREAS.map((t)=>(
 
                 <button
+
                   key={t.id}
-                  className={`tarea ${completadas[t.id] ? "hecha":""}`}
-                  onClick={()=>marcarTarea(t)}
+
+                  className={`tarea ${
+                    completadas[t.id]
+                    ? "hecha"
+                    : ""
+                  }`}
+
+                  onClick={() => marcarTarea(t)}
+
                   disabled={completadas[t.id]}
+
                 >
 
-                  <span>{t.label}</span>
+                  <span>
+                    {t.label}
+                  </span>
+
 
                   <span className="check">
-                    {completadas[t.id] ? "✓":"○"}
+
+                    {
+                      completadas[t.id]
+                      ? "✓"
+                      : "○"
+                    }
+
                   </span>
+
 
                 </button>
 
+
               ))}
+
 
             </div>
 
 
 
+
+
             <button
+
               className="boton-principal"
+
               onClick={generar}
+
               disabled={!todasHechas || procesando}
+
             >
 
-              {procesando ? "⏳ Procesando..." : "Generar Key"}
+              {
+                procesando
+                ? "⏳ Procesando..."
+                : "Generar Key"
+              }
+
 
             </button>
+
+
+
+            {!todasHechas && (
+
+              <p className="ayuda">
+
+                Completa todas las tareas para desbloquear tu key.
+
+              </p>
+
+            )}
 
 
           </>
 
         )}
+
+
 
 
 
@@ -330,38 +477,64 @@ export default function App() {
 
 
               <div className="temp-valor">
+
                 {formatoTiempo(restante)}
+
               </div>
 
+
             </div>
+
+
 
 
 
             <div className="key-label">
+
               Tu Key de {DURACION_HORAS}H
+
             </div>
+
+
 
 
             <div className="key-box">
+
               {key}
+
             </div>
+
+
 
 
 
             <button
+
               className="boton-principal"
+
               onClick={copiar}
+
             >
 
-              {copiado ? "✓ Copiado":"Copiar Key"}
+              {
+                copiado
+                ? "✓ Copiado"
+                : "Copiar Key"
+              }
+
 
             </button>
 
 
 
+
+
             <button
+
               className="boton-secundario"
+
               onClick={reiniciar}
+
             >
 
               Obtener nueva Key
@@ -369,19 +542,29 @@ export default function App() {
             </button>
 
 
+
           </div>
+
 
         )}
 
 
 
+
+
+
         <div className="footer">
+
           Hecho con ♥ — Generador de Key
+
         </div>
+
 
 
       </div>
 
+
     </div>
   );
+
 }
