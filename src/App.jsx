@@ -32,12 +32,35 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!key) return;
-    const id = setInterval(() => {
-      setRestante((r) => (r > 0 ? r - 1 : 0));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [key]);
+  if (!key) return;
+
+  const actualizarTiempo = async () => {
+    const { data } = await supabase
+      .from("licenses")
+      .select("expires_at")
+      .eq("license_key", key)
+      .single();
+
+    if (data?.expires_at) {
+      const ahora = new Date().getTime();
+      const expira = new Date(data.expires_at).getTime();
+
+      const segundos = Math.max(
+        0,
+        Math.floor((expira - ahora) / 1000)
+      );
+
+      setRestante(segundos);
+    }
+  };
+
+  actualizarTiempo();
+
+  const intervalo = setInterval(actualizarTiempo, 1000);
+
+  return () => clearInterval(intervalo);
+
+}, [key]);
 
   const marcarTarea = (t) => {
     if (completadas[t.id]) return;
@@ -64,8 +87,21 @@ export default function App() {
 
     if (error) throw error;
 
-    setKey(data.license_key);
-    setRestante(EXPIRA_SEGUNDOS);
+    const fechaExpira = new Date(
+  Date.now() + EXPIRA_SEGUNDOS * 1000
+).toISOString();
+
+setKey(data.license_key);
+
+setRestante(EXPIRA_SEGUNDOS);
+
+await supabase
+  .from("licenses")
+  .update({
+    active: false,
+    expires_at: fechaExpira
+  })
+  .eq("id", data.id);
 
     await supabase
       .from("licenses")
