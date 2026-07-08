@@ -11,18 +11,36 @@ const TAREAS = [
   { id: "admin", label: "CONTACTAR ADMIN Y SOPORTE 24/7", url: "https://t.me/" },
 ];
 
-function generarKey() {
-  const bloques = 4;
-  const long = 5;
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const partes = [];
-  for (let b = 0; b < bloques; b++) {
-    let p = "";
-    for (let i = 0; i < long; i++) p += chars[Math.floor(Math.random() * chars.length)];
-    partes.push(p);
+const generar = async () => {
+  if (!todasHechas || procesando) return;
+
+  setProcesando(true);
+
+  try {
+    const { data, error } = await supabase
+      .from("licenses")
+      .select("license_key")
+      .eq("active", true);
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      alert("No hay licencias disponibles.");
+      return;
+    }
+
+    const licencia = data[Math.floor(Math.random() * data.length)];
+
+    setKey(licencia.license_key);
+    setRestante(EXPIRA_SEGUNDOS);
+
+  } catch (err) {
+    console.error(err);
+    alert("Error al obtener la licencia.");
+  } finally {
+    setProcesando(false);
   }
-  return "KEY-" + partes.join("-");
-}
+};
 
 function formatoTiempo(s) {
   const h = String(Math.floor(s / 3600)).padStart(2, "0");
