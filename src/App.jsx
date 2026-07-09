@@ -21,17 +21,7 @@ function formatoTiempo(s) {
 }
 
 
-function obtenerDeviceId() {
-
-  let id = localStorage.getItem("device_id");
-
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("device_id", id);
-  }
-
-  return id;
-}
+const ahora = new Date().toISOString();
 
 
 export default function App() {
@@ -149,108 +139,85 @@ export default function App() {
 
   const generar = async () => {
 
-    if (!todasHechas || procesando) return;
+  if (!todasHechas || procesando) return;
+
+  setProcesando(true);
+
+  try {
+
+    const ahora = new Date().toISOString();
 
 
-    setProcesando(true);
-
-
-    try {
-
-      const deviceId = obtenerDeviceId();
-      const ahora = new Date().toISOString();
-
-
-
-      const { data: existente } = await supabase
-        .from("licenses")
-        .select("*")
-        .eq("device_id", deviceId)
-        .gt("expires_at", ahora)
-        .single();
-
-
-
-      if (existente) {
-
-        setKey(existente.license_key);
-
-        localStorage.setItem(
-          "mi_key",
-          existente.license_key
-        );
-
-        return;
-
-      }
+    // Liberar keys vencidas
+    await supabase
+      .from("licenses")
+      .update({
+        active: false,
+        expires_at: null
+      })
+      .lt("expires_at", ahora);
 
 
 
-      await supabase
-        .from("licenses")
-        .update({
-          active:false,
-          device_id:null,
-          expires_at:null
-        })
-        .lt("expires_at", ahora);
+    // Buscar una key libre
+    const { data, error } = await supabase
+      .from("licenses")
+      .select("*")
+      .eq("active", false)
+      .order("id", { ascending: true })
+      .limit(1)
+      .single();
+
+
+    if (error) throw error;
 
 
 
-      const { data, error } = await supabase
-        .from("licenses")
-        .select("*")
-        .eq("active", false)
-        .limit(1)
-        .single();
+    const fechaExpira = new Date(
+      Date.now() + EXPIRA_SEGUNDOS * 1000
+    ).toISOString();
 
 
 
-      if(error) throw error;
+    await supabase
+      .from("licenses")
+      .update({
+        active: true,
+        expires_at: fechaExpira,
+        device_id: null
+      })
+      .eq("id", data.id);
 
 
 
-      const fechaExpira = new Date(
-        Date.now() + EXPIRA_SEGUNDOS * 1000
-      ).toISOString();
+    setKey(data.license_key);
+
+
+    localStorage.setItem(
+      "mi_key",
+      data.license_key
+    );
+
+
+    setRestante(EXPIRA_SEGUNDOS);
 
 
 
-      await supabase
-        .from("licenses")
-        .update({
-          active:true,
-          device_id:deviceId,
-          expires_at:fechaExpira
-        })
-        .eq("id", data.id);
+  } catch(e) {
+
+    console.error(e);
+    alert("No hay keys disponibles");
+
+  } finally {
+
+    setProcesando(false);
+
+  }
+
+};
 
 
 
-      setKey(data.license_key);
-
-      localStorage.setItem(
-        "mi_key",
-        data.license_key
-      );
-
-
-      setRestante(EXPIRA_SEGUNDOS);
-
-
-
-    } catch(e) {
-
-      console.error(e);
-      alert("No hay keys disponibles");
-
-    } finally {
-
-      setProcesando(false);
-
-    }
-
-  };
   const copiar = async () => {
 
     try {
