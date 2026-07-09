@@ -5,529 +5,418 @@ const DURACION_HORAS = 24;
 const EXPIRA_SEGUNDOS = 24 * 60 * 60;
 
 const TAREAS = [
-  { id: "grupo", label: "UNIRSE AL GRUPO DE AVISOS", url: "https://t.me/" },
-  { id: "tiktok", label: "SEGUIR EN TIKTOK", url: "https://www.tiktok.com/" },
-  { id: "youtube", label: "SUSCRIBIRSE AL CANAL DE YOUTUBE", url: "https://www.youtube.com/" },
-  { id: "admin", label: "CONTACTAR ADMIN Y SOPORTE 24/7", url: "https://t.me/" },
+  { id:"grupo", label:"UNIRSE AL GRUPO DE AVISOS", url:"https://t.me/" },
+  { id:"tiktok", label:"SEGUIR EN TIKTOK", url:"https://www.tiktok.com/" },
+  { id:"youtube", label:"SUSCRIBIRSE AL CANAL DE YOUTUBE", url:"https://www.youtube.com/" },
+  { id:"admin", label:"CONTACTAR ADMIN Y SOPORTE 24/7", url:"https://t.me/" },
 ];
 
 
-function formatoTiempo(s) {
-  const h = String(Math.floor(s / 3600)).padStart(2, "0");
-  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-  const seg = String(s % 60).padStart(2, "0");
+function formatoTiempo(s){
+
+  const h = String(Math.floor(s / 3600)).padStart(2,"0");
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2,"0");
+  const seg = String(s % 60).padStart(2,"0");
 
   return `${h}:${m}:${seg}`;
+
 }
 
 
-const ahora = new Date().toISOString();
 
+export default function App(){
 
-export default function App() {
+const [completadas,setCompletadas]=useState({});
+const [procesando,setProcesando]=useState(false);
+const [key,setKey]=useState("");
+const [restante,setRestante]=useState(EXPIRA_SEGUNDOS);
+const [copiado,setCopiado]=useState(false);
 
-  const [completadas, setCompletadas] = useState({});
-  const [procesando, setProcesando] = useState(false);
-  const [key, setKey] = useState("");
-  const [restante, setRestante] = useState(EXPIRA_SEGUNDOS);
-  const [copiado, setCopiado] = useState(false);
 
 
-  useEffect(() => {
+useEffect(()=>{
 
-    const guardada = localStorage.getItem("mi_key");
+const guardada=localStorage.getItem("mi_key");
 
-    if (guardada) {
-      setKey(guardada);
-    }
+if(guardada){
+setKey(guardada);
+}
 
-  }, []);
+},[]);
 
 
 
-  const todasHechas = useMemo(
-    () => TAREAS.every((t) => completadas[t.id]),
-    [completadas]
-  );
+const todasHechas=useMemo(
+()=>TAREAS.every(t=>completadas[t.id]),
+[completadas]
+);
 
 
 
-  useEffect(() => {
+useEffect(()=>{
 
-    if (!key) return;
+if(!key)return;
 
 
-    const actualizarTiempo = async () => {
+const actualizarTiempo=async()=>{
 
-  const { data } = await supabase
-    .from("licenses")
-    .select("expires_at")
-    .eq("license_key", key)
-    .single();
 
+const {data}=await supabase
+.from("licenses")
+.select("expires_at")
+.eq("license_key",key)
+.single();
 
-      if (data?.expires_at) {
 
-        const segundos = Math.max(
-          0,
-          Math.floor(
-            (new Date(data.expires_at).getTime() - Date.now()) / 1000
-          )
-        );
 
+if(data?.expires_at){
 
-        setRestante(segundos);
 
+const segundos=Math.max(
+0,
+Math.floor(
+(new Date(data.expires_at).getTime()-Date.now())/1000
+)
+);
 
-        if (segundos <= 0) {
 
-          await supabase
-            .from("licenses")
-            .update({
-              active: false,
-              device_id: null,
-              expires_at: null
-            })
-            .eq("license_key", key);
+setRestante(segundos);
 
 
-          localStorage.removeItem("mi_key");
-          setKey("");
 
-        }
+if(segundos<=0){
 
-      }
 
-    };
+await supabase
+.from("licenses")
+.update({
+active:false,
+expires_at:null,
+device_id:null
+})
+.eq("license_key",key);
 
 
-    actualizarTiempo();
 
-    const intervalo = setInterval(
-      actualizarTiempo,
-      1000
-    );
+localStorage.removeItem("mi_key");
+setKey("");
 
+}
 
-    return () => clearInterval(intervalo);
 
+}
 
-  }, [key]);
-
-
-
-  const marcarTarea = (t) => {
-
-    if (completadas[t.id]) return;
-
-
-    window.open(t.url, "_blank", "noopener");
-
-
-    setTimeout(() => {
-
-      setCompletadas((c)=>({
-        ...c,
-        [t.id]: true
-      }));
-
-    },1500);
-
-  };
-
-
-
-  const generar = async () => {
-
-  if (!todasHechas || procesando) return;
-
-  setProcesando(true);
-
-  try {
-
-    const ahora = new Date().toISOString();
-
-
-    // Liberar keys vencidas
-    await supabase
-      .from("licenses")
-      .update({
-        active: false,
-        expires_at: null
-      })
-      .lt("expires_at", ahora);
-
-
-
-    // Buscar una key libre
-    const { data, error } = await supabase
-      .from("licenses")
-      .select("*")
-      .eq("active", false)
-      .order("id", { ascending: true })
-      .limit(1)
-      .single();
-
-
-    if (error) throw error;
-
-
-
-    const fechaExpira = new Date(
-      Date.now() + EXPIRA_SEGUNDOS * 1000
-    ).toISOString();
-
-
-
-    await supabase
-      .from("licenses")
-      .update({
-        active: true,
-        expires_at: fechaExpira,
-        device_id: null
-      })
-      .eq("id", data.id);
-
-
-
-    setKey(data.license_key);
-
-
-    localStorage.setItem(
-      "mi_key",
-      data.license_key
-    );
-
-
-    setRestante(EXPIRA_SEGUNDOS);
-
-
-
-  } catch(e) {
-
-    console.error(e);
-    alert("No hay keys disponibles");
-
-  } finally {
-
-    setProcesando(false);
-
-  }
 
 };
 
 
 
-  const copiar = async () => {
+actualizarTiempo();
 
-    try {
 
-      await navigator.clipboard.writeText(key);
+const intervalo=setInterval(
+actualizarTiempo,
+1000
+);
 
-      setCopiado(true);
 
-      setTimeout(() => {
-        setCopiado(false);
-      }, 1500);
+return()=>clearInterval(intervalo);
 
 
-    } catch (e) {
 
-      console.error(e);
+},[key]);
 
-    }
 
-  };
 
 
 
-  const reiniciar = () => {
 
-    localStorage.removeItem("mi_key");
+const marcarTarea=(t)=>{
 
-    setKey("");
 
-    setCompletadas({});
+if(completadas[t.id])return;
 
-    setRestante(EXPIRA_SEGUNDOS);
 
-  };
+window.open(t.url,"_blank");
 
 
+setTimeout(()=>{
 
-  return (
-    <div className="page">
 
-      <div className="card">
+setCompletadas(c=>({
+...c,
+[t.id]:true
+}));
 
-        <div className="icono">
-          🔑
-        </div>
 
+},1500);
 
-        <h1>
-          Generador de Key
-        </h1>
 
+};
 
-        <p className="subtitulo">
-          Crea tu key gratis — rápido y seguro
-        </p>
 
 
 
-        <div className="info-grid">
 
 
-          <div className="info-box">
+const generar=async()=>{
 
-            <div className="info-emoji">
-              📱
-            </div>
 
-            <div>
+if(!todasHechas || procesando)return;
 
-              <div className="info-label">
-                DISPOSITIVO
-              </div>
 
-              <div className="info-valor">
-                1 Dispositivo
-              </div>
+setProcesando(true);
 
-            </div>
 
-          </div>
 
+try{
 
 
-          <div className="info-box">
+const ahora=new Date().toISOString();
 
-            <div className="info-emoji">
-              ⏱
-            </div>
 
-            <div>
+// liberar vencidas
 
-              <div className="info-label">
-                DURACIÓN
-              </div>
+await supabase
+.from("licenses")
+.update({
+active:false,
+expires_at:null,
+device_id:null
+})
+.lt("expires_at",ahora);
 
-              <div className="info-valor">
-                {DURACION_HORAS} Horas
-              </div>
 
-            </div>
 
-          </div>
 
+// buscar key libre
 
-        </div>
+const {data,error}=await supabase
+.from("licenses")
+.select("*")
+.eq("active",false)
+.order("id",{ascending:true})
+.limit(1)
+.single();
 
 
 
+if(error)throw error;
 
 
-        {!key && (
 
-          <>
+const fechaExpira=new Date(
+Date.now()+EXPIRA_SEGUNDOS*1000
+).toISOString();
 
-            <div className="seccion-label">
-              TAREAS DE VERIFICACIÓN
-            </div>
 
 
 
-            <div className="tareas">
 
-              {TAREAS.map((t)=>(
+await supabase
+.from("licenses")
+.update({
 
-                <button
+active:true,
+expires_at:fechaExpira,
+device_id:null
 
-                  key={t.id}
+})
+.eq("id",data.id);
 
-                  className={`tarea ${
-                    completadas[t.id]
-                    ? "hecha"
-                    : ""
-                  }`}
 
-                  onClick={() => marcarTarea(t)}
 
-                  disabled={completadas[t.id]}
 
-                >
 
-                  <span>
-                    {t.label}
-                  </span>
+setKey(data.license_key);
 
 
-                  <span className="check">
+localStorage.setItem(
+"mi_key",
+data.license_key
+);
 
-                    {
-                      completadas[t.id]
-                      ? "✓"
-                      : "○"
-                    }
 
-                  </span>
+setRestante(EXPIRA_SEGUNDOS);
 
 
-                </button>
 
+}catch(e){
 
-              ))}
+console.error(e);
+alert("No hay keys disponibles");
 
 
-            </div>
+}finally{
 
+setProcesando(false);
 
+}
 
 
+};
 
-            <button
 
-              className="boton-principal"
 
-              onClick={generar}
 
-              disabled={!todasHechas || procesando}
 
-            >
 
-              {
-                procesando
-                ? "⏳ Procesando..."
-                : "Generar Key"
-              }
+const copiar=async()=>{
 
 
-            </button>
+await navigator.clipboard.writeText(key);
 
+setCopiado(true);
 
 
-            {!todasHechas && (
+setTimeout(()=>{
+setCopiado(false);
+},1500);
 
-              <p className="ayuda">
 
-                Completa todas las tareas para desbloquear tu key.
+};
 
-              </p>
 
-            )}
 
 
-          </>
 
-        )}
+const reiniciar=()=>{
 
 
+localStorage.removeItem("mi_key");
 
+setKey("");
 
+setCompletadas({});
 
+setRestante(EXPIRA_SEGUNDOS);
 
-        {key && (
 
-          <div className="resultado">
+};
 
 
-            <div className="temporizador">
 
-              <div className="temp-label">
-                Expira en
-              </div>
 
 
-              <div className="temp-valor">
 
-                {formatoTiempo(restante)}
+return (
 
-              </div>
+<div className="page">
 
+<div className="card">
 
-            </div>
 
+<h1>🔑 Generador de Key</h1>
 
+<p>
+Crea tu key gratis — rápido y seguro
+</p>
 
 
 
-            <div className="key-label">
+{!key && (
 
-              Tu Key de {DURACION_HORAS}H
+<>
 
-            </div>
+<h3>TAREAS DE VERIFICACIÓN</h3>
 
 
+{TAREAS.map(t=>(
 
+<button
+key={t.id}
+onClick={()=>marcarTarea(t)}
+disabled={completadas[t.id]}
+>
 
-            <div className="key-box">
+{t.label}
 
-              {key}
+{completadas[t.id]?" ✓":" ○"}
 
-            </div>
+</button>
 
+))}
 
 
 
+<button
+onClick={generar}
+disabled={!todasHechas || procesando}
+>
 
-            <button
+{
+procesando
+?"⏳ Procesando..."
+:"Generar Key"
+}
 
-              className="boton-principal"
+</button>
 
-              onClick={copiar}
 
-            >
+</>
 
-              {
-                copiado
-                ? "✓ Copiado"
-                : "Copiar Key"
-              }
+)}
 
 
-            </button>
 
 
 
 
+{key && (
 
-            <button
+<div>
 
-              className="boton-secundario"
 
-              onClick={reiniciar}
+<h3>
+Expira en
+</h3>
 
-            >
 
-              Obtener nueva Key
+<h2>
+{formatoTiempo(restante)}
+</h2>
 
-            </button>
 
 
+<h3>
+Tu Key de {DURACION_HORAS}H
+</h3>
 
-          </div>
 
+<div>
+{key}
+</div>
 
-        )}
 
 
+<button onClick={copiar}>
 
+{
+copiado
+?"✓ Copiado"
+:"Copiar Key"
+}
 
+</button>
 
 
-        <div className="footer">
 
-          Hecho con ♥ — Generador de Key
+<button onClick={reiniciar}>
+Obtener nueva Key
+</button>
 
-        </div>
 
+</div>
 
+)}
 
-      </div>
 
 
-    </div>
-  );
+</div>
+
+</div>
+
+);
+
 
 }
