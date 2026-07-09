@@ -69,15 +69,11 @@ export default function App() {
 
     const actualizarTiempo = async () => {
 
-      const deviceId = obtenerDeviceId();
-
-
-      const { data } = await supabase
-        .from("licenses")
-        .select("expires_at")
-        .eq("license_key", key)
-        .eq("device_id", deviceId)
-        .single();
+  const { data } = await supabase
+    .from("licenses")
+    .select("expires_at")
+    .eq("license_key", key)
+    .single();
 
 
       if (data?.expires_at) {
